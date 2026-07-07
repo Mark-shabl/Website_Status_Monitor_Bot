@@ -24,13 +24,16 @@ This creates `sites.db` (SQLite) on first run and starts polling Telegram for co
 ## Commands
 
 - `/start` - greeting and instructions
-- `/add <url> [name]` - start monitoring a URL
+- `/add <url> [name] --label <label>` - start monitoring a URL under a label (required)
 - `/remove <url>` - stop monitoring a URL
-- `/list` - list your monitored URLs
-- `/status` - run an on-demand check of all your URLs
+- `/list` - list your monitored URLs, grouped by label
+- `/status` - run an on-demand check of all your URLs, sites within each of OK/Problems sorted by label
 - `/check <url>` - one-off check of any URL
 - `/config <url> <minutes>` - change the check interval for a URL
 - `/help` - command reference
+
+Labels are per-chat: a label is auto-created the first time you reference its
+name in `/add`, and reused for later sites with the same name.
 
 ## Notes / scope
 

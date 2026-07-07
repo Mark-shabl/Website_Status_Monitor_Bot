@@ -1,9 +1,9 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session, joinedload, sessionmaker
 
-from models import Base, MonitoredSite, StatusHistory
+from models import Base, Label, MonitoredSite, StatusHistory
 
 _engine = None
 _SessionLocal = None
@@ -22,17 +22,34 @@ def get_session() -> Session:
     return _SessionLocal()
 
 
-def add_site(url: str, chat_id: str, check_interval: int, name: str | None = None) -> MonitoredSite:
+def add_site(
+    url: str,
+    chat_id: str,
+    check_interval: int,
+    label_name: str,
+    name: str | None = None,
+) -> MonitoredSite:
+    chat_id = str(chat_id)
     with get_session() as session:
+        label = session.scalar(
+            select(Label).where(Label.chat_id == chat_id, Label.name == label_name)
+        )
+        if label is None:
+            label = Label(chat_id=chat_id, name=label_name)
+            session.add(label)
+            session.flush()
+
         site = MonitoredSite(
             url=url,
             name=name,
-            chat_id=str(chat_id),
+            chat_id=chat_id,
+            label_id=label.id,
             check_interval=check_interval,
         )
         session.add(site)
         session.commit()
         session.refresh(site)
+        _ = site.label.name  # force-load relationship while the session is still open
         return site
 
 
@@ -53,26 +70,35 @@ def remove_site(url: str, chat_id: str) -> bool:
 def get_site(url: str, chat_id: str) -> MonitoredSite | None:
     with get_session() as session:
         return session.scalar(
-            select(MonitoredSite).where(
-                MonitoredSite.url == url, MonitoredSite.chat_id == str(chat_id)
-            )
+            select(MonitoredSite)
+            .options(joinedload(MonitoredSite.label))
+            .where(MonitoredSite.url == url, MonitoredSite.chat_id == str(chat_id))
         )
 
 
 def list_sites(chat_id: str | None = None) -> list[MonitoredSite]:
+    """Returns sites ordered by label creation order, then by site add order.
+
+    This ordering is what /list and /status rely on to group same-label
+    sites together in a stable, predictable order.
+    """
     with get_session() as session:
-        stmt = select(MonitoredSite)
+        stmt = (
+            select(MonitoredSite)
+            .options(joinedload(MonitoredSite.label))
+            .order_by(MonitoredSite.label_id, MonitoredSite.id)
+        )
         if chat_id is not None:
             stmt = stmt.where(MonitoredSite.chat_id == str(chat_id))
-        return list(session.scalars(stmt).all())
+        return list(session.scalars(stmt).unique().all())
 
 
 def update_site_interval(url: str, chat_id: str, interval_seconds: int) -> MonitoredSite | None:
     with get_session() as session:
         site = session.scalar(
-            select(MonitoredSite).where(
-                MonitoredSite.url == url, MonitoredSite.chat_id == str(chat_id)
-            )
+            select(MonitoredSite)
+            .options(joinedload(MonitoredSite.label))
+            .where(MonitoredSite.url == url, MonitoredSite.chat_id == str(chat_id))
         )
         if site is None:
             return None
@@ -80,6 +106,7 @@ def update_site_interval(url: str, chat_id: str, interval_seconds: int) -> Monit
         site.updated_at = datetime.now(timezone.utc)
         session.commit()
         session.refresh(site)
+        _ = site.label.name  # force-load relationship while the session is still open
         return site
 
 

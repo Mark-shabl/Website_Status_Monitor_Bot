@@ -8,6 +8,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -16,13 +17,29 @@ class Base(DeclarativeBase):
     pass
 
 
-class MonitoredSite(Base):
-    __tablename__ = "monitored_sites"
+class Label(Base):
+    __tablename__ = "labels"
+    __table_args__ = (UniqueConstraint("chat_id", "name", name="uq_label_chat_name"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    url: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    chat_id: Mapped[str] = mapped_column(String, nullable=False)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+    sites: Mapped[list["MonitoredSite"]] = relationship(back_populates="label")
+
+
+class MonitoredSite(Base):
+    __tablename__ = "monitored_sites"
+    __table_args__ = (UniqueConstraint("chat_id", "url", name="uq_site_chat_url"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    url: Mapped[str] = mapped_column(String, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=True)
     chat_id: Mapped[str] = mapped_column(String, nullable=False)
+    label_id: Mapped[int] = mapped_column(ForeignKey("labels.id"), nullable=False)
     check_interval: Mapped[int] = mapped_column(Integer, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -34,6 +51,7 @@ class MonitoredSite(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+    label: Mapped["Label"] = relationship(back_populates="sites")
     history: Mapped[list["StatusHistory"]] = relationship(
         back_populates="site", cascade="all, delete-orphan"
     )

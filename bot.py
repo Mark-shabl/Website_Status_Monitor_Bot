@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 HELP_TEXT = (
     "Доступные команды:\n"
     "/start - приветствие и инструкция\n"
-    "/add <url> [название] - добавить сайт для мониторинга\n"
+    "/add <url> [название] --label <label> - добавить сайт для мониторинга\n"
     "/remove <url> - удалить сайт из мониторинга\n"
     "/list - показать все отслеживаемые сайты\n"
     "/status - текущий статус всех сайтов\n"
@@ -22,6 +22,22 @@ HELP_TEXT = (
     "/config <url> <минуты> - настроить интервал проверки\n"
     "/help - справка по командам"
 )
+
+
+def _extract_label(args: list[str]) -> tuple[list[str], str | None]:
+    """Pulls "--label <value...>" out of args, returning the rest and the value.
+
+    Everything after --label is treated as the label (it's always the last
+    part of the command), so labels can contain spaces.
+    """
+    if "--label" not in args:
+        return args, None
+    idx = args.index("--label")
+    if idx + 1 >= len(args):
+        return args[:idx], None
+    label = " ".join(args[idx + 1 :])
+    rest = args[:idx]
+    return rest, label
 
 
 def _job_name(site_id: int) -> str:
@@ -36,7 +52,12 @@ def schedule_site_job(application: Application, site, settings: Settings) -> Non
         interval=site.check_interval,
         first=site.check_interval,
         name=_job_name(site.id),
-        data={"site_id": site.id, "url": site.url, "chat_id": site.chat_id},
+        data={
+            "site_id": site.id,
+            "url": site.url,
+            "chat_id": site.chat_id,
+            "label": site.label.name,
+        },
     )
 
 
@@ -57,10 +78,12 @@ async def check_site_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if previous.is_ok and not result["is_ok"]:
-        text = notifications.format_alert(data["url"], result, previous.status_code)
+        text = notifications.format_alert(
+            data["url"], result, previous.status_code, data.get("label")
+        )
         await context.bot.send_message(chat_id=data["chat_id"], text=text)
     elif not previous.is_ok and result["is_ok"]:
-        text = notifications.format_recovery(data["url"], result)
+        text = notifications.format_recovery(data["url"], result, data.get("label"))
         await context.bot.send_message(chat_id=data["chat_id"], text=text)
 
 
@@ -78,7 +101,7 @@ async def daily_report_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         for site in chat_sites:
             result = await _run_check(site.url, settings)
             database.record_check(site.id, result)
-            results.append((site.url, result))
+            results.append((site.url, result, site.label.name))
         text = notifications.format_daily_report(results)
         await context.bot.send_message(chat_id=chat_id, text=text)
 
@@ -102,11 +125,18 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def add_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not context.args:
-        await update.message.reply_text("Использование: /add <url> [название]")
+        await update.message.reply_text("Использование: /add <url> [название] --label <label>")
         return
 
     url = context.args[0]
-    name = " ".join(context.args[1:]) if len(context.args) > 1 else None
+    rest_args, label_name = _extract_label(context.args[1:])
+    if not label_name:
+        await update.message.reply_text(
+            "Укажите label: /add <url> [название] --label <label>"
+        )
+        return
+
+    name = " ".join(rest_args) if rest_args else None
 
     if not monitor.is_valid_url(url):
         await update.message.reply_text("Некорректный URL. Разрешены только http/https.")
@@ -123,10 +153,11 @@ async def add_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         url=url,
         chat_id=chat_id,
         check_interval=settings.default_check_interval,
+        label_name=label_name,
         name=name,
     )
     schedule_site_job(context.application, site, settings)
-    await update.message.reply_text(f"Сайт добавлен: {url}")
+    await update.message.reply_text(f"Сайт добавлен: [{label_name}] {url}")
 
 
 async def remove_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -158,7 +189,7 @@ async def list_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         status = "активен" if site.is_active else "выключен"
         name = f" ({site.name})" if site.name else ""
         lines.append(
-            f"• {site.url}{name} - каждые {site.check_interval // 60} мин, {status}"
+            f"• [{site.label.name}] {site.url}{name} - каждые {site.check_interval // 60} мин, {status}"
         )
     await update.message.reply_text("\n".join(lines))
 
@@ -175,7 +206,7 @@ async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     for site in sites:
         result = await _run_check(site.url, settings)
         database.record_check(site.id, result)
-        results.append((site.url, result))
+        results.append((site.url, result, site.label.name))
 
     await update.message.reply_text(notifications.format_daily_report(results))
 

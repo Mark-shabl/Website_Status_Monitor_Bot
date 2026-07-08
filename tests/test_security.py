@@ -41,3 +41,10 @@ async def test_allows_public_url():
 
     assert ok is True
     assert reason is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_host_ips_uses_event_loop():
+    ips = await security._resolve_host_ips("example.com")
+    assert ips
+    assert all("." in ip or ":" in ip for ip in ips)

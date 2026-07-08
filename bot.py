@@ -662,11 +662,16 @@ async def mention_command_handler(
 
 
 def register_handlers(application: Application) -> None:
+    # @BotName /add ... has the mention at offset 0, so CommandHandler ignores it
+    # and ~filters.COMMAND skips the mention handler. Handle mentions first.
+    application.add_handler(
+        MessageHandler(
+            filters.TEXT & filters.Entity(MessageEntity.MENTION),
+            mention_command_handler,
+        )
+    )
     for name, callback in COMMAND_HANDLERS.items():
         application.add_handler(CommandHandler(name, callback))
-    application.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, mention_command_handler)
-    )
 
 
 BOT_COMMANDS = [

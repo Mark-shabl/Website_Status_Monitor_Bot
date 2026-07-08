@@ -1,0 +1,14 @@
+services:
+  site-health-checker:
+    build: .
+    container_name: site-health-checker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: sqlite+aiosqlite:////app/data/sites.db
+    volumes:
+      - site-health-checker-data:/app/data
+
+volumes:
+  site-health-checker-data:

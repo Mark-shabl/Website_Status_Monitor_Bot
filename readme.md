@@ -93,12 +93,40 @@ Telegram покажет команды этого бота в меню `/` по�
 
 ## Docker
 
+### Быстрый старт (docker compose)
+
 ```bash
-docker run -d \
-  -e TELEGRAM_BOT_TOKEN=your_token \
-  -v site-monitor-data:/app/data \
+cp .env.example .env
+# заполните TELEGRAM_BOT_TOKEN в .env
+
+docker compose up -d --build
+docker compose logs -f site-health-checker
+```
+
+База SQLite хранится в Docker volume `site-health-checker-data` (`/app/data/sites.db` внутри контейнера).
+
+### Остановка
+
+```bash
+docker compose down
+```
+
+Данные сохраняются в volume. Чтобы удалить и volume:
+
+```bash
+docker compose down -v
+```
+
+### Запуск без compose
+
+```bash
+docker build -t site-health-checker .
+docker run -d --name site-health-checker \
+  --env-file .env \
   -e DATABASE_URL=sqlite+aiosqlite:////app/data/sites.db \
-  your-image
+  -v site-health-checker-data:/app/data \
+  --restart unless-stopped \
+  site-health-checker
 ```
 
 При недоступной БД бот продолжает работать и уведомляет чаты об ошибках (не чаще раза в 5 минут).
@@ -124,5 +152,7 @@ CI запускается на push/PR (Python 3.11, 3.12) — см. `.github/wo
 ├── models.py         # ORM-модели
 ├── notifications.py  # Форматирование сообщений
 ├── config.py         # Настройки из .env
+├── Dockerfile        # Образ для деплоя
+├── docker-compose.yml
 └── tests/            # pytest-тесты
 ```

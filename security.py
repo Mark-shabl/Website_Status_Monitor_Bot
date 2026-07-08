@@ -37,7 +37,8 @@ def _is_blocked_ip(value: str) -> bool:
 
 async def _resolve_host_ips(hostname: str) -> list[str]:
     try:
-        infos = await asyncio.getaddrinfo(
+        loop = asyncio.get_running_loop()
+        infos = await loop.getaddrinfo(
             hostname, None, type=socket.SOCK_STREAM
         )
     except socket.gaierror as exc:

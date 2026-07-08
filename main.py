@@ -2,7 +2,7 @@ import datetime as dt
 import logging
 
 import httpx
-from telegram.ext import Application, CommandHandler
+from telegram.ext import Application
 
 import bot
 import database
@@ -15,9 +15,14 @@ logger = logging.getLogger(__name__)
 
 async def post_init(application: Application) -> None:
     settings = application.bot_data["settings"]
+    me = await application.bot.get_me()
+    application.bot_data["bot_username"] = me.username
+    await bot.setup_bot_commands(application)
+
     application.bot_data["http_client"] = build_http_client(settings.user_agent)
     application.bot_data["rate_limiter"] = HostRateLimiter(settings.host_rate_limit_seconds)
     application.bot_data["db_error_notified"] = {}
+    application.bot_data["site_check_locks"] = {}
 
     available = await database.init_db(settings.database_url)
     if not available:
@@ -76,24 +81,7 @@ def main() -> None:
         .build()
     )
     application.bot_data["settings"] = settings
-
-    handlers = [
-        ("start", bot.start_command),
-        ("help", bot.help_command),
-        ("add", bot.add_command),
-        ("remove", bot.remove_command),
-        ("list", bot.list_command),
-        ("status", bot.status_command),
-        ("check", bot.check_command),
-        ("config", bot.config_command),
-        ("pause", bot.pause_command),
-        ("resume", bot.resume_command),
-        ("pause_all", bot.pause_all_command),
-        ("resume_all", bot.resume_all_command),
-        ("clean_history", bot.clean_history_command),
-    ]
-    for name, callback in handlers:
-        application.add_handler(CommandHandler(name, callback))
+    bot.register_handlers(application)
 
     application.run_polling()
 

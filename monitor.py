@@ -37,9 +37,7 @@ def _is_transient(result: dict) -> bool:
     if result.get("status_code") is not None:
         return False
     error = result.get("error") or ""
-    if error in TRANSIENT_ERRORS:
-        return True
-    return error.startswith("Request error:")
+    return error in TRANSIENT_ERRORS
 
 
 async def check_website(
@@ -115,7 +113,8 @@ async def check_website_with_retry(
     retry_delay: int,
     rate_limiter,
 ) -> dict:
-    attempts = max(1, max_retries)
+    # max_retries = number of retries after the first attempt (per spec)
+    attempts = max_retries + 1
     result: dict | None = None
 
     for attempt in range(attempts):

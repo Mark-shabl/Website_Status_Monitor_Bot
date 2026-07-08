@@ -58,13 +58,26 @@ python main.py
 | `/resume_all` | Возобновить все сайты |
 | `/clean_history` | Удалить историю старше 3 дней |
 
+## Групповой чат (несколько ботов)
+
+Добавьте бота в группу и вызывайте команды **с указанием бота**:
+
+```
+/add@YourBotName https://example.com --label prod
+@YourBotName /add https://example.com --label prod
+@YourBotName add https://example.com --label prod
+```
+
+Telegram покажет команды этого бота в меню `/` после регистрации.  
+Каждая группа хранит **свой** список сайтов и label'ов.
+
 ## Переменные окружения
 
 | Переменная | По умолчанию | Описание |
 |------------|--------------|----------|
 | `TELEGRAM_BOT_TOKEN` | — | Токен бота (обязателен) |
 | `DEFAULT_CHECK_INTERVAL` | `300` | Интервал по умолчанию (сек) |
-| `MAX_RETRY_COUNT` | `3` | Попыток при transient ошибках |
+| `MAX_RETRY_COUNT` | `3` | Повторных попыток после первой (всего 1 + N) |
 | `RETRY_DELAY_SECONDS` | `5` | Пауза между retry |
 | `TIMEOUT_SECONDS` | `10` | Таймаут HTTP |
 | `USER_AGENT` | `SiteMonitorBot/1.0` | User-Agent |

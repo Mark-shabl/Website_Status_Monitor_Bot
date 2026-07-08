@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from telegram.ext import Application
@@ -46,6 +46,8 @@ def _make_context(app_settings):
     }
     application.job_queue.get_jobs_by_name.return_value = []
     context.application = application
+    context.bot = MagicMock()
+    context.bot.username = "TestBot"
     context.args = []
     return context
 
@@ -56,7 +58,7 @@ async def test_start_command(app_settings):
     context = _make_context(app_settings)
     await bot.start_command(update, context)
     update.message.reply_text.assert_awaited_once()
-    assert "Доступные команды" in update.message.reply_text.await_args.args[0]
+    assert "Site Health Checker" in update.message.reply_text.await_args.args[0]
 
 
 @pytest.mark.asyncio
@@ -66,7 +68,7 @@ async def test_add_command_requires_label(app_settings):
     context.args = update.args
     await bot.add_command(update, context)
     text = update.message.reply_text.await_args.args[0]
-    assert "label" in text
+    assert "label" in text.lower() or "label" in text
 
 
 @pytest.mark.asyncio

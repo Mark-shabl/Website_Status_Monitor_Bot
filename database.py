@@ -36,12 +36,14 @@ def _normalize_database_url(database_url: str) -> str:
 def _db_operation(func: Callable[..., T]) -> Callable[..., T]:
     @wraps(func)
     async def wrapper(*args, **kwargs):
+        global _available
         if not _available:
             raise DatabaseError("Database is unavailable")
         try:
             return await func(*args, **kwargs)
         except SQLAlchemyError as exc:
             logger.exception("Database error in %s", func.__name__)
+            _available = False
             raise DatabaseError(str(exc)) from exc
 
     return wrapper

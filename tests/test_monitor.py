@@ -77,7 +77,8 @@ async def test_check_website_with_retry_recovers():
 @respx.mock
 @patch("monitor.security.is_safe_url", AsyncMock(return_value=(True, None)))
 async def test_check_website_with_retry_exhausted():
-    respx.get("https://down.example.com").mock(side_effect=httpx.ConnectError("down"))
+    route = respx.get("https://down.example.com")
+    route.side_effect = httpx.ConnectError("down")
 
     async with httpx.AsyncClient() as client:
         limiter = HostRateLimiter(0)
@@ -93,6 +94,31 @@ async def test_check_website_with_retry_exhausted():
 
     assert result["is_ok"] is False
     assert result["error"] == "Connection Error"
+    assert route.call_count == 4
+
+
+@pytest.mark.asyncio
+@patch(
+    "monitor.security.is_safe_url",
+    AsyncMock(return_value=(False, "Blocked IP address")),
+)
+async def test_check_website_with_retry_skips_blocked_url():
+    with respx.mock:
+        route = respx.get("http://127.0.0.1").mock(return_value=httpx.Response(200))
+        async with httpx.AsyncClient() as client:
+            limiter = HostRateLimiter(0)
+            result = await monitor.check_website_with_retry(
+                client,
+                "http://127.0.0.1",
+                timeout=5,
+                user_agent="TestBot/1.0",
+                max_retries=3,
+                retry_delay=0,
+                rate_limiter=limiter,
+            )
+
+    assert result["error"] == "Blocked IP address"
+    assert route.call_count == 0
 
 
 def test_is_valid_url():

@@ -1,6 +1,6 @@
-# Site Health Checker Bot
+# Site Health Checker Bot — Setup
 
-MVP implementation per the spec in the repo root `readme.md`.
+Подробная документация: [README.md](README.md)
 
 ## Setup
 
@@ -11,7 +11,7 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Edit `.env` and fill in `TELEGRAM_BOT_TOKEN` (from @BotFather) and `ADMIN_CHAT_ID`.
+Edit `.env` and fill in `TELEGRAM_BOT_TOKEN` (from @BotFather).
 
 ## Run
 
@@ -21,24 +21,16 @@ python main.py
 
 This creates `sites.db` (SQLite) on first run and starts polling Telegram for commands.
 
-## Commands
+## Tests
 
-- `/start` - greeting and instructions
-- `/add <url> [name] --label <label>` - start monitoring a URL under a label (required)
-- `/remove <url>` - stop monitoring a URL
-- `/list` - list your monitored URLs, grouped by label
-- `/status` - run an on-demand check of all your URLs, sites within each of OK/Problems sorted by label
-- `/check <url>` - one-off check of any URL
-- `/config <url> <minutes>` - change the check interval for a URL
-- `/help` - command reference
+```bash
+pip install -r requirements-dev.txt
+pytest -v
+```
 
-Labels are per-chat: a label is auto-created the first time you reference its
-name in `/add`, and reused for later sites with the same name.
+## Notes
 
-## Notes / scope
-
-This is the core MVP from the spec (sections 2-5): monitoring, all commands,
-SQLite storage, alert/recovery notifications, and a daily report (sent at
-09:00 server time to every chat with active sites). Retry/rate-limit hardening
-(section 6), SSRF/whitelist protections (section 7), and the v2.0 extras
-(section 11) are not implemented yet.
+- Fully async stack: httpx + SQLAlchemy async (aiosqlite)
+- Daily report at configured timezone (default 09:00 Europe/Moscow)
+- History auto-purged daily (default 03:00, retention 3 days)
+- Bot survives database outages (useful in Docker)

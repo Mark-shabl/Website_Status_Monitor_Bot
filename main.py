@@ -2,7 +2,8 @@ import datetime as dt
 import logging
 
 import httpx
-from telegram.ext import Application
+from telegram import Update
+from telegram.ext import Application, ContextTypes
 
 import bot
 import database
@@ -58,6 +59,22 @@ async def post_init(application: Application) -> None:
     )
 
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.exception("Unhandled exception while processing update", exc_info=context.error)
+    if not isinstance(update, Update):
+        return
+    message = update.effective_message
+    if message is None:
+        return
+    try:
+        await message.reply_text(
+            "❌ Внутренняя ошибка\n\n"
+            "Команда не выполнена. Попробуйте ещё раз или напишите /help."
+        )
+    except Exception:
+        logger.exception("Failed to send error notification to chat")
+
+
 async def post_shutdown(application: Application) -> None:
     client: httpx.AsyncClient | None = application.bot_data.get("http_client")
     if client is not None:
@@ -82,6 +99,7 @@ def main() -> None:
     )
     application.bot_data["settings"] = settings
     bot.register_handlers(application)
+    application.add_error_handler(error_handler)
 
     application.run_polling()
 

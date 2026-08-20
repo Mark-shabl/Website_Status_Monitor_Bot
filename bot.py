@@ -123,9 +123,18 @@ def _get_site_check_lock(application: Application, site_id: int) -> asyncio.Lock
     return locks[site_id]
 
 
+async def _get_thread_id(chat_id: str | int) -> int | None:
+    try:
+        return await database.get_chat_thread_id(chat_id)
+    except DatabaseError as exc:
+        logger.error("Failed to read chat thread setting for %s: %s", chat_id, exc)
+        return None
+
+
 async def _send_long_message(bot, chat_id: str | int, text: str) -> None:
+    thread_id = await _get_thread_id(chat_id)
     for chunk in split_message(text):
-        await bot.send_message(chat_id=chat_id, text=chunk)
+        await bot.send_message(chat_id=chat_id, text=chunk, message_thread_id=thread_id)
 
 
 async def _reply_long_message(update: Update, text: str) -> None:
@@ -170,9 +179,11 @@ async def _notify_db_error(
     if now - last < DB_NOTIFY_COOLDOWN:
         return
     notified[key] = now
+    thread_id = await _get_thread_id(chat_id)
     await context.bot.send_message(
         chat_id=chat_id,
         text=notifications.format_db_error(message),
+        message_thread_id=thread_id,
     )
 
 
@@ -238,10 +249,16 @@ async def check_site_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             text = notifications.format_alert(
                 data["url"], result, previous.status_code, data.get("label")
             )
-            await context.bot.send_message(chat_id=data["chat_id"], text=text)
+            thread_id = await _get_thread_id(data["chat_id"])
+            await context.bot.send_message(
+                chat_id=data["chat_id"], text=text, message_thread_id=thread_id
+            )
         elif not previous.is_ok and result["is_ok"]:
             text = notifications.format_recovery(data["url"], result, data.get("label"))
-            await context.bot.send_message(chat_id=data["chat_id"], text=text)
+            thread_id = await _get_thread_id(data["chat_id"])
+            await context.bot.send_message(
+                chat_id=data["chat_id"], text=text, message_thread_id=thread_id
+            )
 
 
 async def daily_report_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -614,6 +631,50 @@ async def clean_history_command(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
 
+async def set_topic_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.message
+    chat_id = update.effective_chat.id
+
+    if context.args and context.args[0].lower() in ("general", "reset", "сброс"):
+        try:
+            await database.set_chat_thread_id(chat_id, None)
+        except DatabaseError as exc:
+            await message.reply_text(notifications.format_db_error(str(exc)))
+            return
+        await message.reply_text(
+            notifications.format_success(
+                "Тема сброшена",
+                "Уведомления снова будут приходить в основной чат (General).",
+            )
+        )
+        return
+
+    if not getattr(message, "is_topic_message", False):
+        await message.reply_text(
+            notifications.format_error(
+                "Нужна тема",
+                "Выполните эту команду внутри темы (топика), куда должны "
+                "приходить уведомления.\n"
+                "Чтобы сбросить на основной чат: /set_topic general",
+            )
+        )
+        return
+
+    thread_id = message.message_thread_id
+    try:
+        await database.set_chat_thread_id(chat_id, thread_id)
+    except DatabaseError as exc:
+        await message.reply_text(notifications.format_db_error(str(exc)))
+        return
+
+    await message.reply_text(
+        notifications.format_success(
+            "Тема установлена",
+            "Уведомления и отчёты теперь будут приходить в эту тему.",
+        )
+    )
+
+
 COMMAND_HANDLERS = {
     "start": start_command,
     "help": help_command,
@@ -628,6 +689,7 @@ COMMAND_HANDLERS = {
     "pause_all": pause_all_command,
     "resume_all": resume_all_command,
     "clean_history": clean_history_command,
+    "set_topic": set_topic_command,
 }
 
 
@@ -688,6 +750,7 @@ BOT_COMMANDS = [
     BotCommand("pause_all", "Пауза для всех сайтов"),
     BotCommand("resume_all", "Возобновить все сайты"),
     BotCommand("clean_history", "Очистить старую историю"),
+    BotCommand("set_topic", "Куда слать уведомления (тема группы)"),
 ]
 
 

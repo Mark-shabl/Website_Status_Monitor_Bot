@@ -31,6 +31,13 @@ class Label(Base):
     sites: Mapped[list["MonitoredSite"]] = relationship(back_populates="label")
 
 
+class ChatSettings(Base):
+    __tablename__ = "chat_settings"
+
+    chat_id: Mapped[str] = mapped_column(String, primary_key=True)
+    thread_id: Mapped[int] = mapped_column(Integer, nullable=True)
+
+
 class MonitoredSite(Base):
     __tablename__ = "monitored_sites"
     __table_args__ = (UniqueConstraint("chat_id", "url", name="uq_site_chat_url"),)

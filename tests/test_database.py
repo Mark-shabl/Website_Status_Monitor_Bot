@@ -91,6 +91,17 @@ async def test_purge_old_history(db):
 
 
 @pytest.mark.asyncio
+async def test_chat_thread_id_get_set_reset(db):
+    assert await database.get_chat_thread_id("123") is None
+
+    await database.set_chat_thread_id("123", 42)
+    assert await database.get_chat_thread_id("123") == 42
+
+    await database.set_chat_thread_id("123", None)
+    assert await database.get_chat_thread_id("123") is None
+
+
+@pytest.mark.asyncio
 async def test_init_db_failure_returns_false():
     await database.close_db()
     ok = await database.init_db("sqlite+aiosqlite:////invalid/path/db.sqlite")

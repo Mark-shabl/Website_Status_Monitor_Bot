@@ -111,3 +111,39 @@ async def test_clean_history_command(app_settings):
     await bot.clean_history_command(update, context)
     text = update.message.reply_text.await_args.args[0]
     assert "7" in text
+
+
+@pytest.mark.asyncio
+async def test_set_topic_command_requires_topic(app_settings):
+    update = _make_update()
+    update.message.is_topic_message = False
+    context = _make_context(app_settings)
+    await bot.set_topic_command(update, context)
+    text = update.message.reply_text.await_args.args[0]
+    assert "тем" in text.lower()
+
+
+@pytest.mark.asyncio
+async def test_set_topic_command_sets_thread(mocker, app_settings):
+    mock_set = mocker.patch("bot.database.set_chat_thread_id", AsyncMock())
+    update = _make_update()
+    update.message.is_topic_message = True
+    update.message.message_thread_id = 42
+    context = _make_context(app_settings)
+    await bot.set_topic_command(update, context)
+    mock_set.assert_awaited_once_with(123, 42)
+    text = update.message.reply_text.await_args.args[0]
+    assert "установлена" in text.lower()
+
+
+@pytest.mark.asyncio
+async def test_set_topic_command_reset(mocker, app_settings):
+    mock_set = mocker.patch("bot.database.set_chat_thread_id", AsyncMock())
+    update = _make_update(args=["general"])
+    update.message.is_topic_message = False
+    context = _make_context(app_settings)
+    context.args = update.args
+    await bot.set_topic_command(update, context)
+    mock_set.assert_awaited_once_with(123, None)
+    text = update.message.reply_text.await_args.args[0]
+    assert "сброшена" in text.lower()

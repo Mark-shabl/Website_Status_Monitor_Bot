@@ -8,7 +8,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import joinedload
 
-from models import Base, Label, MonitoredSite, StatusHistory
+from models import Base, ChatSettings, Label, MonitoredSite, StatusHistory
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +199,26 @@ async def set_all_active(chat_id: str, active: bool) -> int:
         )
         await session.commit()
         return result.rowcount or 0
+
+
+@_db_operation
+async def get_chat_thread_id(chat_id: str) -> int | None:
+    async with _session() as session:
+        settings = await session.get(ChatSettings, str(chat_id))
+        return settings.thread_id if settings else None
+
+
+@_db_operation
+async def set_chat_thread_id(chat_id: str, thread_id: int | None) -> None:
+    chat_id = str(chat_id)
+    async with _session() as session:
+        settings = await session.get(ChatSettings, chat_id)
+        if settings is None:
+            settings = ChatSettings(chat_id=chat_id, thread_id=thread_id)
+            session.add(settings)
+        else:
+            settings.thread_id = thread_id
+        await session.commit()
 
 
 @_db_operation

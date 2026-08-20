@@ -213,7 +213,9 @@ def format_help(bot_username: str | None = None) -> str:
         "/pause_all · /resume_all\n"
         "\n"
         "Прочее:\n"
-        "/clean_history · /help"
+        "/clean_history · /help\n"
+        "/set_topic — слать уведомления в текущую тему\n"
+        "/set_topic general — сбросить на основной чат"
     )
 
 
